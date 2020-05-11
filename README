@@ -1,0 +1,103 @@
+Aaron VanderGraaff 5/7/20
+
+This is a malloc library implementation consisting of the 4 malloc functions:
+    void *calloc(size_t nmemb, size_t size);
+    void *malloc(size_t size);
+    void free(void *ptr);
+    void *realloc(void *ptr, size_t size);
+
+These functions mostly behave in the same way as defined by the
+c standard library, ie
+    * void *calloc takes a size_t nmemb and a size_t size. It then sets
+      all nmemb elements of size size to 0 on the heap and returns 
+      a pointer to the beginning of the allocated memory.
+    * void *malloc() allocates size bytes on the heap then returns
+      a pointer to the beginning of the alocated memory. malloc() gives no
+      guarantee of the contents of memory.
+    * free() frees a pointer previously allocated by malloc to the system.
+      The freed hunk can be used by subsequent calls to malloc and is no
+      longer safe to use in its unnallocated state.
+    * void *realloc() takes a void *ptr previously allocated by a malloc 
+      function and a size_t size. If ptr is NULL, realloc(NULL, size) becomes
+      malloc(size). Otherwise, realloc() grows the memory hunk pointed to 
+      by ptr to size size and returns a pointer to the new memory hunk. 
+      realloc() preserves the contents of ptr from before the call.
+
+Differences between this library and c stdlib:
+    * free() and realloc() each support the ptr being passed to not 
+      be the first byte of a memory region.
+
+Usage:
+    The library can be compiled as DYNAMIC library with:
+        make lib64/libmalloc.so
+            or 
+        make all
+    This will compile the 64-bit library into the lib64 directory.
+    
+    To use the library with a program, it must be linked at link time.
+    For example, to use with a file called "test.c" with a header "test.h":
+        gcc -Wall -c -o test.o test.c
+        gcc -Wall -L (PATH_TO_DIR_WITH_LIB) -o test test.o test.h -lmalloc
+    With the path I have, it would look like:
+        gcc -Wall -c -o test.o test.c
+        gcc -Wall -L ~/mymalloc/lib64 -o test test.o test.h -lmalloc
+    See the Makefile for plenty of examples. 
+
+    Then to run the program, the library needs to be added to the library
+    path. To set that up in bash, run:
+        export LD_LIBRARY_PATH="(PATH_TO_DIR_WITH_LIB)":$LD_LIBRARY_PATH
+    For my setup, that would be:
+        export LD_LIBRARY_PATH="~/mymalloc/lib64":$LD_LIBRARY_PATH
+
+    The library can be compiled as a STATIC library with:
+        make lib64_s/libmalloc.a
+            or 
+        make all
+    Using the STATIC library is exactly the same as a DYNAMIC library:
+    To use the library with a program, it must be linked at link time.
+    For example, to use with a file called "test.c" with a header "test.h":
+        gcc -Wall -c -o test.o test.c
+        gcc -Wall -L (PATH_TO_DIR_WITH_LIB) -o test test.o test.h -lmalloc
+    With the path I have, it would look like:
+        gcc -Wall -c -o test.o test.c
+        gcc -Wall -L ~/mymalloc/lib64_s -o test test.o test.h -lmalloc
+    Again, see the Makefile for an example.
+    DIFFRENCES: The STATIC library does not require the LD_LIBRARY_PATH to be 
+                altered.
+
+
+
+Debug Mode:
+    There are 2 debug modes implemented. Both require setting the environment
+    variable DEBUG_MALLOC. This first mode just requires to set DEBUG_MALLOC
+    and simply prints the address of the pointer and its size. This one
+    is broadly narrates what the library is doing. To set it in bash:
+        export DEBUG_MALLOC=
+    The other mode is much more verbose and prints out the linked list of
+    data hunks, among other stuff. To set this mode in bash:
+        export DEBUG_MALLOC="1"
+
+Notes:
+    * malloc(0) returns NULL, realloc(NULL, 0) returns NULL, calloc(0, size)
+      returns NULL, and calloc(nmemb, size) returns NULL. 
+    * realloc(NULL, size) is equivalent to malloc(size).
+    * realloc(ptr, 0) is equivalent to free(ptr).
+
+Features:
+    * free() merges adjacent free blocks to minimize fragmentation
+    * realloc() attempts in place expansion in 2 ways:
+            1. If the next block is unallocated, it merges the blocks. 
+               If the new size is large enough, it was successful.
+            2. If the next node is NULL, it expands the size of the hunk
+               until size is met, calling sbrk(2) if it has to.
+    * If a large hunk (> 64kb) happens to be unallocated at the top of the 
+      heap, it is returned to the system.
+
+Drawbacks:
+    * Allocating dumb amounts of memory (ie max amount on 64 bit) is super
+      slow because only 64k blocks are allocated at a time by sbrk
+
+        
+    
+    
+        
