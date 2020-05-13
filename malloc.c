@@ -2,6 +2,7 @@
 
 /* TODO: Preliminary tests are looking pretty good.
          Need to do:
+            * check_heap_top() in calloc, malloc, realloc
             * More intensive tests
             * More commenting
             * README
@@ -24,16 +25,6 @@ void *calloc(size_t nmemb, size_t size) {
         }
         return NULL;
     }
-    /*
-    if (errno == ENOMEM) {
-        return NULL;
-    }
-    */
-    /* Return memory to the system if there is a crap ton of memory
-       at the top of the heap */
-    /*
-    check_heap_top(debug);
-    */
     outptr = alloc(nmemb*size, debug);
     if (outptr) {
         memset(outptr, 0, nmemb*size);
@@ -49,9 +40,6 @@ void *calloc(size_t nmemb, size_t size) {
 void *malloc(size_t size) {
     bool debug;
     void *ptr = NULL;
-    /*
-    errno = 0;
-    */
 
     if ((debug = setup()) == -1) {
         return NULL;
@@ -62,17 +50,6 @@ void *malloc(size_t size) {
         }
         return NULL;
     }
-    /*
-    if (errno == ENOMEM) {
-        myprint("errno = ENOMEM\n", debug);
-        return NULL;
-    }
-    */
-    /* Return memory to the system if there is a crap ton of memory
-       at the top of the heap */
-    /*
-    check_heap_top(debug);
-    */
 
     ptr = alloc(size, debug);
     if (debug) {
@@ -89,9 +66,6 @@ void free(void *ptr) {
     header *hptr;
     bool debug = false;
     char buf[50];
-    /*
-    errno = 0;
-    */
     if (getenv("DEBUG_MALLOC")) {
         debug = true;
     }
@@ -114,7 +88,7 @@ void free(void *ptr) {
 
 
     /* Check for debug */
-    if (getenv("DEBUG_MALLOC")) {
+    if (debug) {
         print_debug(FREE, ptr, 0, 0, 0, 0);
     }
     if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
@@ -135,9 +109,7 @@ void free(void *ptr) {
         }
         if ((sbrk(-hptr->size)) == (void *) -1) {
             perror("sbrk");
-            /*
-            errno = ENOMEM;
-            */
+            exit(EXIT_FAILURE);
         }
         heap_top -= hptr->size;
         heap_cur -= (hptr->size + sizeof(header));
@@ -146,24 +118,6 @@ void free(void *ptr) {
         }
         return;
     }
-
-    /*
-    if ((heap_top - heap_cur) > 2*BLK_SIZE) {
-        myprint("Returning memory to system without node\n", debug);
-        print_list();
-        if ((tmp_ptr = sbrk(-round_up(((uintptr_t) heap_top - 
-                         (uintptr_t) heap_cur) 
-                        - BLK_SIZE))) == (void *) -1) {
-            perror("sbrk");
-        }
-        heap_top = (void *) round_up((uintptr_t) heap_cur + BLK_SIZE);
-
-    }
-    */
-
-
-
-
 
     if (debug) {
         myprint("before merge:\n", debug);
@@ -215,8 +169,6 @@ void *realloc(void *ptr, size_t size) {
         out_ptr = alloc(size, debug);
         if (debug) {
             print_debug(REALLOC, out_ptr, size, 0, 0, ptr);
-        }
-        if (debug) {
             print_list();
         }
         return out_ptr;
@@ -256,18 +208,6 @@ void *realloc(void *ptr, size_t size) {
     */
 
 
-#ifdef REMOVED
-    /* If there is room in the merged hunk, just return the same ptr */
-    if (hptr->size >= size) {
-        insert_node(hptr, size, debug);
-        if (debug) {
-            print_debug(REALLOC, ptr, size, 0, 0, ptr);
-            myprint("Doing an in place expansion\n", debug);
-            print_list();
-        }
-        return ptr;
-    }
-#endif
 
     /* If the node is the last in the list, just grab more memory 
        from the heap */
@@ -339,16 +279,6 @@ header *find_header(void *ptr, bool debug) {
            the header + the size of the hunk, then it must be in this hunk
        */
         if ((uintptr_t) ptr < (uintptr_t) hptr + hptr->size + sizeof(header)) {
-            /*
-            if (!hptr->allocated) {
-                if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
-                    snprintf(buf, 29, "Malloc: Freeing a free hunk\n");
-                    fputs(buf, stderr);
-                }
-                exit(EXIT_FAILURE);
-            }
-            */
-            /*hptr->allocated = false;*/
             return hptr;
         }
         hptr = hptr->next;
@@ -477,13 +407,12 @@ void *alloc(size_t size, bool debug) {
         /*
         myprint("sbrk for more heap space\n", debug);
         */
-        snprintf(buf, 40, "sbrk(%lu) for more heap space\n", 
-                BLK_SIZE*sbrk_counter);
-        fputs(buf, stderr);
+        if (debug) {
+            snprintf(buf, 40, "sbrk(%lu) for more heap space\n", 
+                    BLK_SIZE*sbrk_counter);
+            fputs(buf, stderr);
+        }
         if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter++)) == (void *) -1) {
-            /*
-            perror("sbrk");
-            */
             errno = ENOMEM;
             check_heap_top(debug);
             return NULL;
@@ -491,24 +420,14 @@ void *alloc(size_t size, bool debug) {
         heap_top = (void *) ((uintptr_t) new_heap_bot + sbrk_counter*BLK_SIZE);
     
     }
-    /*
-    check_heap_top(debug, round_up(size));
-    */
 
     /* ptr should point to end of list */
-    myprint("Going inside create node\n", debug);
     out_ptr = create_node(ptr, size, debug);
-    /*
-    if (debug) {
-        print_debug(MALLOC, out_ptr, size);
-    }
-    */
     return out_ptr;
 }
 
 void insert_node(header *ptr, size_t size, bool debug) {
     header *new_node;
-    /*char buf[50]; */
     
     if ((ptr->size - size) < 32) {
         ptr->allocated = true;
@@ -635,9 +554,6 @@ void print_debug(int kind, void *ptr, size_t total_size, size_t nmemb,
         size_t size, void *old_ptr) {
     char buf[160];
     char buf2[150];
-    /*
-    char buf3[150];
-    */
     snprintf(buf, 9, "MALLOC: ");
     if (kind == MALLOC) {
         snprintf(buf+8, 17, "malloc");
