@@ -14,7 +14,10 @@ int main(int argc, char *argv[]) {
     buf = realloc(buf, 300000);
     buf = realloc(buf, 0);
     buf = realloc(buf, 100000);
+    /*
     buf2 = realloc(buf2, 5000);
+    */
+    buf2 = malloc(5000);
     buf3 = calloc(500, sizeof(char));
     strcpy(buf3, "hello world\n");
     strcpy(buf3+495, "end\n");

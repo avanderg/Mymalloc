@@ -8,7 +8,7 @@
 
 #define BLK_SIZE 65536
 
-#if defined(__x86_64)
+#if defined (__x86_64)
     #define x86
 #endif
 

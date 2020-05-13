@@ -34,6 +34,8 @@ void *calloc(size_t nmemb, size_t size) {
         myprint("\nprinting list:\n", debug);
         print_list();
     }
+    myprint("calling check heap top in calloc\n", debug);
+    check_heap_top(debug);
     return outptr;
     
 }
@@ -44,6 +46,7 @@ void *malloc(size_t size) {
     if ((debug = setup()) == -1) {
         return NULL;
     }
+    myprint("calling malloc\n", debug);
     if (!size) {
         if (debug) {
             print_debug(MALLOC, ptr, size, 0, 0, 0);
@@ -59,6 +62,8 @@ void *malloc(size_t size) {
     myprint("\nprinting list:\n", debug);
     print_list();
     */
+    myprint("calling check heap top in malloc\n", debug);
+    check_heap_top(debug);
     return ptr;
 
 }
@@ -171,6 +176,8 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, out_ptr, size, 0, 0, ptr);
             print_list();
         }
+        myprint("calling check heap top in realloc1\n", debug);
+        check_heap_top(debug);
         return out_ptr;
     }
     else if (!size) {
@@ -197,6 +204,8 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
             print_list();
         }
+        myprint("calling check heap top in realloc2\n", debug);
+        check_heap_top(debug);
         return ptr;
     }
 
@@ -228,6 +237,8 @@ void *realloc(void *ptr, size_t size) {
                 if (debug) {
                     print_debug(REALLOC, ptr, size, 0, 0, ptr);
                 }
+                myprint("calling check heap top in realloc3\n", debug);
+                check_heap_top(debug);
                 return NULL;
             }
             heap_top = (void *) ((uintptr_t) new_heap_bot 
@@ -246,6 +257,8 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
         }
 
+        myprint("calling check heap top in realloc4\n", debug);
+        check_heap_top(debug);
         return ptr;
 
     }
@@ -268,6 +281,7 @@ void *realloc(void *ptr, size_t size) {
         myprint("Making a new node and copying\n", debug);
         print_list();
     }
+    check_heap_top(debug);
     return out_ptr;
 }
 
@@ -347,19 +361,31 @@ bool setup() {
 
 void check_heap_top(bool debug) {
     char buf[50];
+    snprintf(buf, 40, "heap_top: %p\n", heap_top);
+    fputs(buf, stderr);
+    snprintf(buf, 40, "heap_cur: %p\n", heap_cur);
+    fputs(buf, stderr);
     if ((heap_top - heap_cur) > 2*BLK_SIZE) {
         if (debug) {
             myprint("Returning memory to system without node\n", debug);
             print_list();
         }
-        if (sbrk(-round_up(((uintptr_t) heap_top - 
+        if (sbrk(-round_up((-(uintptr_t) heap_top - 
                          (uintptr_t) heap_cur) 
                         - BLK_SIZE)) == (void *) -1) {
 
             perror("sbrk");
         }
+        myprint("\nAltering heap_top\n", debug);
+        snprintf(buf, 40, "heap_cur again: %p\n", heap_cur);
+        fputs(buf, stderr);
+        snprintf(buf, 40, "heap_top + BLK_SIZE: %p\n", 
+                (void *) round_up((uintptr_t) heap_cur + BLK_SIZE));
+        fputs(buf, stderr);
         heap_top = (void *) round_up((uintptr_t) heap_cur + BLK_SIZE);
     }
+    snprintf(buf, 40, "heap_top after: %p\n", heap_top);
+    fputs(buf, stderr);
 }
 
 void *alloc(size_t size, bool debug) {

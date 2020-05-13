@@ -27,7 +27,11 @@ int main(int argc, char *argv[]) {
     free(buf3);
 
 
+    #if defined (__x86_64)
+    buf = malloc(210456789000000);
+    #else
     buf = malloc(2104567890);
+    #endif
     printf("finished malloc\n");
     if (!buf) {
         printf("Failed malloc\n");
