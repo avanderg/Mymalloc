@@ -2,7 +2,7 @@
 
 /* TODO: Preliminary tests are looking pretty good.
          Need to do:
-            * check_heap_top() in calloc, malloc, realloc
+            * "end_list" implementation for returning big nodes to system
             * More intensive tests
             * More commenting
             * README
@@ -12,6 +12,7 @@ static void *heap_bot = NULL;
 static void *heap_top = NULL;
 static void *heap_cur = NULL;
 static header *head_list = NULL;
+static header *end_list = NULL;
 
 void *calloc(size_t nmemb, size_t size) {
     void *outptr;
@@ -34,8 +35,10 @@ void *calloc(size_t nmemb, size_t size) {
         myprint("\nprinting list:\n", debug);
         print_list();
     }
+    /*
     myprint("calling check heap top in calloc\n", debug);
     check_heap_top(debug);
+    */
     return outptr;
     
 }
@@ -58,18 +61,21 @@ void *malloc(size_t size) {
     if (debug) {
         print_debug(MALLOC, ptr, size, 0, 0, 0);
     }
-    /*
+    if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
     myprint("\nprinting list:\n", debug);
     print_list();
-    */
+    }
+    /*
     myprint("calling check heap top in malloc\n", debug);
     check_heap_top(debug);
+    */
     return ptr;
 
 }
 void free(void *ptr) {
     header *hptr;
     bool debug = false;
+    void *tmp_ptr;
     char buf[50];
     if (getenv("DEBUG_MALLOC")) {
         debug = true;
@@ -107,21 +113,48 @@ void free(void *ptr) {
     check_heap_top(debug);
 
     /* Return memory to system if at end of list, and is a large chunk*/
+    /*
     if (!hptr->next && hptr->size > BLK_SIZE) {
         remove_node(hptr);
+        */
+    if (!end_list->allocated && end_list->size > BLK_SIZE) {
+
         if (debug) {
             myprint("Returning memory to the system from node\n", debug);
         }
-        if ((sbrk(-hptr->size)) == (void *) -1) {
+        if ((sbrk(-end_list->size)) == (void *) -1) {
             perror("sbrk");
             exit(EXIT_FAILURE);
         }
-        heap_top -= hptr->size;
-        heap_cur -= (hptr->size + sizeof(header));
-        if (debug) {
-        print_list();
-        }
+        /*
+        snprintf(buf, 40, "heap_top before node: %p\n", heap_top);
+        fputs(buf, stderr);
+        snprintf(buf, 40, "heap_cur before node: %p\n", heap_cur);
+        fputs(buf, stderr);
+        snprintf(buf, 40, "end_list->size: %lu\n", end_list->size);
+        fputs(buf, stderr);
+        */
+        heap_top = (void *) ((uintptr_t) heap_top - end_list->size);
+        heap_cur -= (end_list->size + sizeof(header));
+        /*
+        snprintf(buf, 40, "heap_top after node: %p\n", heap_top);
+        fputs(buf, stderr);
+        snprintf(buf, 40, "heap_cur after node: %p\n", heap_cur);
+        fputs(buf, stderr);
+        snprintf(buf, 40, "actual heap_top: %p\n", sbrk(0));
+        fputs(buf, stderr);
+        */
+        tmp_ptr = end_list;
+        remove_node(end_list);
+        /*
         return;
+        */
+        if (debug) {
+            print_list();
+        }
+        if (hptr == tmp_ptr) {
+            return;
+        }
     }
 
     if (debug) {
@@ -143,24 +176,10 @@ void *realloc(void *ptr, size_t size) {
     void *new_heap_bot;
     bool debug;
     int sbrk_counter;
-    /*char buf[50];*/
-    /*
-    errno = 0;
-    */
     header *hptr;
     if ((debug = setup()) == -1) {
         return NULL;
     }
-    /*
-    if (errno == ENOMEM) {
-        return NULL;
-    }
-    */
-    /* Return memory to the system if there is a crap ton of memory
-       at the top of the heap */
-    /*
-    check_heap_top(debug);
-    */
 
 
     /* If ptr passes is NULL, equivalent to calling malloc(size) */
@@ -176,8 +195,10 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, out_ptr, size, 0, 0, ptr);
             print_list();
         }
+        /*
         myprint("calling check heap top in realloc1\n", debug);
         check_heap_top(debug);
+        */
         return out_ptr;
     }
     else if (!size) {
@@ -204,8 +225,10 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
             print_list();
         }
+        /*
         myprint("calling check heap top in realloc2\n", debug);
         check_heap_top(debug);
+        */
         return ptr;
     }
 
@@ -228,7 +251,7 @@ void *realloc(void *ptr, size_t size) {
         sbrk_counter = 1;
         while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
             /* Need to call sbrk */
-            if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter++)) 
+            if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) 
                     == (void *) -1) {
                 /*
                 perror("sbrk");
@@ -242,7 +265,7 @@ void *realloc(void *ptr, size_t size) {
                 return NULL;
             }
             heap_top = (void *) ((uintptr_t) new_heap_bot 
-                    + BLK_SIZE*sbrk_counter);
+                    + BLK_SIZE*sbrk_counter++);
         }
 
         heap_cur = (void *) round_up((uintptr_t) heap_cur) +
@@ -257,8 +280,10 @@ void *realloc(void *ptr, size_t size) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
         }
 
+        /*
         myprint("calling check heap top in realloc4\n", debug);
         check_heap_top(debug);
+        */
         return ptr;
 
     }
@@ -281,7 +306,9 @@ void *realloc(void *ptr, size_t size) {
         myprint("Making a new node and copying\n", debug);
         print_list();
     }
+    /*
     check_heap_top(debug);
+    */
     return out_ptr;
 }
 
@@ -315,6 +342,7 @@ void merge(header *hptr, bool debug) {
 }
 
 void remove_node(header *hptr) {
+
     if (!hptr->next && hptr == head_list) {
         head_list = NULL;
         return;
@@ -324,6 +352,9 @@ void remove_node(header *hptr) {
     }
     if (hptr->next) {
         hptr->next->prev = hptr->prev;
+    }
+    else {
+        end_list = hptr->prev;
     }
 }
 
@@ -360,32 +391,27 @@ bool setup() {
 }
 
 void check_heap_top(bool debug) {
-    char buf[50];
-    snprintf(buf, 40, "heap_top: %p\n", heap_top);
-    fputs(buf, stderr);
-    snprintf(buf, 40, "heap_cur: %p\n", heap_cur);
-    fputs(buf, stderr);
+    uintptr_t heap_dif;
+    void *out;
     if ((heap_top - heap_cur) > 2*BLK_SIZE) {
         if (debug) {
             myprint("Returning memory to system without node\n", debug);
             print_list();
         }
-        if (sbrk(-round_up((-(uintptr_t) heap_top - 
-                         (uintptr_t) heap_cur) 
-                        - BLK_SIZE)) == (void *) -1) {
+
+        heap_dif = (uintptr_t) heap_top - (uintptr_t) heap_cur;
+        if ((out = sbrk(-round_up(heap_dif 
+                        - BLK_SIZE))) == (void *) -1) {
 
             perror("sbrk");
+            exit(EXIT_FAILURE);
         }
-        myprint("\nAltering heap_top\n", debug);
-        snprintf(buf, 40, "heap_cur again: %p\n", heap_cur);
-        fputs(buf, stderr);
-        snprintf(buf, 40, "heap_top + BLK_SIZE: %p\n", 
-                (void *) round_up((uintptr_t) heap_cur + BLK_SIZE));
-        fputs(buf, stderr);
-        heap_top = (void *) round_up((uintptr_t) heap_cur + BLK_SIZE);
+        heap_top = (void *) round_up((uintptr_t) heap_cur +
+                                    BLK_SIZE);
     }
-    snprintf(buf, 40, "heap_top after: %p\n", heap_top);
-    fputs(buf, stderr);
+    if (debug) {
+        print_list();
+    }
 }
 
 void *alloc(size_t size, bool debug) {
@@ -393,7 +419,6 @@ void *alloc(size_t size, bool debug) {
     void *new_heap_bot = NULL;
     void *out_ptr = NULL;
     long unsigned int sbrk_counter;
-    char buf[50];
 
     ptr = head_list;
     myprint("Starting to run alloc\n", debug);
@@ -430,20 +455,15 @@ void *alloc(size_t size, bool debug) {
 
     while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
         /* Need to call sbrk */
-        /*
-        myprint("sbrk for more heap space\n", debug);
-        */
         if (debug) {
-            snprintf(buf, 40, "sbrk(%lu) for more heap space\n", 
-                    BLK_SIZE*sbrk_counter);
-            fputs(buf, stderr);
         }
-        if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter++)) == (void *) -1) {
+        if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) == (void *) -1) {
             errno = ENOMEM;
             check_heap_top(debug);
             return NULL;
         }
-        heap_top = (void *) ((uintptr_t) new_heap_bot + sbrk_counter*BLK_SIZE);
+        heap_top = (void *) ((uintptr_t) new_heap_bot + 
+                BLK_SIZE*sbrk_counter++);
     
     }
 
@@ -475,6 +495,11 @@ void insert_node(header *ptr, size_t size, bool debug) {
         new_node->next = ptr->next;
         ptr->next->prev = new_node;
     }
+    if (ptr == end_list) {
+       end_list = new_node; 
+    }
+
+
     ptr->next = new_node;
 
 }
@@ -490,10 +515,12 @@ void *create_node(header *ptr, size_t size, bool debug) {
     if (!ptr) {
         new_node->prev = NULL;
         head_list = new_node;
+        end_list = new_node;
     }
     else {
         ptr->next = new_node;
         new_node->prev = ptr;
+        end_list = new_node;
     }
 
     /* Move the current heap ptr up the size of a header and 
@@ -553,7 +580,7 @@ void print_list(void) {
             snprintf(buf, 24, "allocated: %d\n", tmp->allocated);
             fputs(buf, stderr);
 
-            snprintf(buf, 20, "current: %p\n", tmp);
+            snprintf(buf, 30, "current: %p\n", tmp);
             fputs(buf, stderr);
 
             snprintf(buf, 18, "next: %p\n", tmp->next);
@@ -566,6 +593,28 @@ void print_list(void) {
         }
         myprint("\n", debug);
     }
+    myprint("End list:\n", debug);
+            #ifdef x86
+            snprintf(buf, 19, "size: %lu\n", end_list->size);
+            #else
+            snprintf(buf, 19, "size: %d\n", end_list->size);
+            #endif
+
+            fputs(buf, stderr);
+            
+            snprintf(buf, 24, "allocated: %d\n", end_list->allocated);
+            fputs(buf, stderr);
+
+            snprintf(buf, 30, "current: %p\n", end_list);
+            fputs(buf, stderr);
+
+            snprintf(buf, 18, "next: %p\n", end_list->next);
+            fputs(buf, stderr);
+
+            snprintf(buf, 18, "prev: %p\n\n", end_list->prev);
+            fputs(buf, stderr);
+    myprint("\n", debug);
+
 }
 
 
