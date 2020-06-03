@@ -79,7 +79,7 @@ Debug Mode:
 
 Notes:
     * malloc(0) returns NULL, realloc(NULL, 0) returns NULL, calloc(0, size)
-      returns NULL, and calloc(nmemb, size) returns NULL. 
+      returns NULL, and calloc(nmemb, 0) returns NULL. 
     * realloc(NULL, size) is equivalent to malloc(size).
     * realloc(ptr, 0) is equivalent to free(ptr).
 
@@ -94,8 +94,10 @@ Features:
       heap, it is returned to the system.
 
 Drawbacks:
-    * Allocating dumb amounts of memory (ie max amount on 64 bit) is super
-      slow because only 64k blocks are allocated at a time by sbrk
+    * Allocating dumb amounts of memory (ie max amount on 64 bit) with calloc
+      is slow. The memset to 0 happens much slower than the stdlib malloc.
+      Could use some optimization (maybe architecture specific implementation),
+      but for most use cases it is plenty fast. 
 
         
     

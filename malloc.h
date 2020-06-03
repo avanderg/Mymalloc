@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #define BLK_SIZE 65536
+#define MALLOC_ALIGN 16
 
 #if defined (__x86_64)
     #define x86
@@ -18,8 +19,6 @@
 #define REALLOC 4
 
 
-#define NEXT 1
-#define PREV 2
 
 typedef enum bool {false, true} bool;
 typedef struct header header;
@@ -34,16 +33,16 @@ struct header {
 void *calloc(size_t nmemb, size_t size); 
 void *malloc(size_t size); 
 void free(void *ptr); 
-header *find_header(void *ptr, bool debug);
-void merge(header *hptr, bool debug);
+header *find_header(void *ptr);
+void merge(header *hptr);
 void remove_node(header *hptr); 
 void *realloc(void *ptr, size_t size); 
 bool setup(void); 
-void check_heap_top(bool debug); 
-void *alloc(size_t size, bool debug); 
-void insert_node(header *ptr, size_t size, bool debug); 
-void *create_node(header *ptr, size_t size, bool debug); 
-void myprint(char *s, bool debug); 
+void check_heap_top(void); 
+void *alloc(size_t size); 
+void insert_node(header *ptr, size_t size); 
+void *create_node(header *ptr, size_t size); 
+void myprint(char *s); 
 void print_list(void); 
 uintptr_t round_up(uintptr_t addr);
 void print_debug(int kind, void *ptr, size_t total_size, size_t nmemb,

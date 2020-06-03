@@ -1,20 +1,20 @@
 CC = gcc
-CFLAGS = -Wall -g -fpic
+CFLAGS = -Wall -g -fpic 
 OBJS = malloc64.o malloc32.o\
 	   tests/test.o tests/test_smallmalloc.o tests/test3.o\
 	   tests/test_splitnode.o tests/test_calloc.o\
 	   tests/test_merge.o tests/test_realloc.o tests/test_enomem.o\
-		tests/test_freebadptr.o
+		tests/test_freebadptr.o tests/test_nulls.o tests/test_reallocbadptr.o
 
 PROGS = test test_smallmalloc test3 test_splitnode test_calloc test_merge\
-		test_realloc test_enomem test_freebadptr
+		test_realloc test_enomem test_freebadptr test_nulls test_reallocbadptr
 LIBS = lib64/libmalloc.so lib/libmalloc.so lib64_s/libmalloc.a
-LIB_PATH=~/mymalloc_x86/lib64
+LIB_PATH=~/Mymalloc/lib64
 
 all: lib64/libmalloc.so lib64_s/libmalloc.a
 
 tests: test test_smallmalloc test3 test_splitnode test_calloc test_merge\
-	   test_realloc test_enomem test_freebadptr
+	   test_realloc test_enomem test_freebadptr test_nulls test_reallocbadptr
 
 test_s: lib64_s/libmalloc.a tests/test.o
 	$(CC) -o test tests/test.o -Llib64_s -lmalloc
@@ -63,6 +63,17 @@ test_freebadptr: lib64/libmalloc.so tests/test_freebadptr.o
 	$(CC) -L $(LIB_PATH) -o test_freebadptr tests/test_freebadptr.o -lmalloc
 tests/test_freebadptr.o: tests/test_freebadptr.c
 	$(CC) $(CFLAGS) -c -o tests/test_freebadptr.o tests/test_freebadptr.c
+
+test_nulls: lib64/libmalloc.so tests/test_nulls.o
+	$(CC) -L $(LIB_PATH) -o test_nulls tests/test_nulls.o -lmalloc
+tests/test_nulls.o: tests/test_nulls.c
+	$(CC) $(CFLAGS) -c -o tests/test_nulls.o tests/test_nulls.c
+
+test_reallocbadptr: lib64/libmalloc.so tests/test_reallocbadptr.o
+	$(CC) -L $(LIB_PATH) -o test_reallocbadptr tests/test_reallocbadptr.o \
+		-lmalloc
+tests/test_reallocbadptr.o: tests/test_reallocbadptr.c
+	$(CC) $(CFLAGS) -c -o tests/test_reallocbadptr.o tests/test_reallocbadptr.c
 
 lib/libmalloc.so: lib malloc32.o
 	$(CC) $(CFLAGS) -m32 -shared -o $@ malloc32.o

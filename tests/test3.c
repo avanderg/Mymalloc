@@ -46,7 +46,6 @@ int main(int argc, char *argv[]) {
             printf("No memory left\n");
         }
     }
-    free(buf);
     buf = malloc(400000);
     buf = realloc(buf, 35);
     buf = realloc(buf, 512);
@@ -55,4 +54,9 @@ int main(int argc, char *argv[]) {
     buf = realloc(buf, 100000);
     free(buf);
     free(buf3);
+    free(buf2);
+    buf2 = malloc(20);
+    buf3 = malloc(200000);
+    free(buf3);
+    free(buf2);
 }

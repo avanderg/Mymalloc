@@ -54,7 +54,6 @@ int main(int argc, char *argv[]) {
         }
     }
     buf2 = malloc(300000);
-    /*free(buf); */
     free(buf2);
 
     buf = realloc(buf, 2104567890);
