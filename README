@@ -1,4 +1,4 @@
-Aaron VanderGraaff 5/7/20
+Aaron VanderGraaff 6/03/2020 
 
 This is a malloc library implementation consisting of the 4 malloc functions:
     void *calloc(size_t nmemb, size_t size);
@@ -8,7 +8,7 @@ This is a malloc library implementation consisting of the 4 malloc functions:
 
 These functions mostly behave in the same way as defined by the
 c standard library, ie
-    * void *calloc takes a size_t nmemb and a size_t size. It then sets
+    * void *calloc() takes a size_t nmemb and a size_t size. It then sets
       all nmemb elements of size size to 0 on the heap and returns 
       a pointer to the beginning of the allocated memory.
     * void *malloc() allocates size bytes on the heap then returns
@@ -18,10 +18,11 @@ c standard library, ie
       The freed hunk can be used by subsequent calls to malloc and is no
       longer safe to use in its unnallocated state.
     * void *realloc() takes a void *ptr previously allocated by a malloc 
-      function and a size_t size. If ptr is NULL, realloc(NULL, size) becomes
-      malloc(size). Otherwise, realloc() grows the memory hunk pointed to 
-      by ptr to size size and returns a pointer to the new memory hunk. 
-      realloc() preserves the contents of ptr from before the call.
+      function and a size_t size. If ptr is NULL, realloc(NULL, size) 
+      becomes malloc(size). Otherwise, realloc() grows the memory hunk 
+      pointed to by ptr to size size and returns a pointer to the new 
+      memory hunk. realloc() preserves the contents of ptr from before the 
+      call.
 
 Differences between this library and c stdlib:
     * free() and realloc() each support the ptr being passed to not 

@@ -1,12 +1,12 @@
+/* Aaron VanderGraaff 6/03/2020 */
+
 #include "malloc.h"
 
 /* TODO: Preliminary tests are looking pretty good.
          Need to do:
-            * Remove (#define) "Magic" numbers
             * More intensive tests
                 * Pretty intensive already done, have to think about other 
                   tests that could break it
-            * More commenting (and remove print statement commented out)
             * README
                 * Written but needs a proofread
 */
@@ -20,10 +20,14 @@ static bool debug = false;
 static bool debug_verbose = false;
 
 void *calloc(size_t nmemb, size_t size) {
+/* calloc() takes a size_t nmemb and a size_t size. It then sets
+   all nmemb elements of size size to 0 on the heap and returns 
+   a pointer to the beginning of the allocated memory.
+*/
+
     void *ptr = NULL; /* Pointer to the hunk */
 
     /* Setup the heap and debug params */
-    /* This might be able to be a macro ? */
     if (setup() == -1) {
         return NULL;
     }
@@ -55,10 +59,14 @@ void *calloc(size_t nmemb, size_t size) {
 }
 
 void *malloc(size_t size) {
+/* malloc() allocates size bytes on the heap then returns
+   a pointer to the beginning of the alocated memory. malloc() gives no
+   guarantee of the contents of memory.
+*/
+
     void *ptr = NULL; /* Pointer to the hunk */
 
     /* Setup the heap and debug params */
-    /* This might be able to be a macro ? */
     if (setup() == -1) {
         return NULL;
     }
@@ -87,6 +95,11 @@ void *malloc(size_t size) {
 }
 
 void free(void *ptr) {
+/* free() frees a pointer previously allocated by malloc to the system.
+   The freed hunk can be used by subsequent calls to malloc and is no
+   longer safe to use in its unnallocated state.
+*/
+
     header *hptr; /* The header of the hunk to free */
     void *tmp_ptr; /* Temporarily holds end of list for comparison */
     char buf[50]; /* Print buffer */
@@ -99,7 +112,8 @@ void free(void *ptr) {
     /* Find the header corresponding to this hunk */
     hptr = find_header(ptr);
 
-    /* find_header returns NULL if the pointer wasn't allocated in the heap */
+    /* find_header returns NULL if the pointer wasn't allocated in the heap 
+    */
     if (!hptr) {
         snprintf(buf, 40, "free(): Invalid pointer \n");
         fputs(buf, stderr);
@@ -170,7 +184,6 @@ void free(void *ptr) {
     }
     /* Merge the freed node to minimize fragmentation */
     
-    /* Might not need the if (hptr) here, hptr being NULL handled above */
     merge(hptr);
 
     if (debug) {
@@ -181,14 +194,21 @@ void free(void *ptr) {
 }
 
 void *realloc(void *ptr, size_t size) {
+/* realloc() takes a void *ptr previously allocated by a malloc 
+   function and a size_t size. If ptr is NULL, realloc(NULL, size) 
+   becomes malloc(size). Otherwise, realloc() grows the memory hunk 
+   pointed to by ptr to size size and returns a pointer to the new 
+   memory hunk. realloc() preserves the contents of ptr from before the 
+   call.
+*/
     void *out_ptr; /* Pointer to the hunk */
     void *new_heap_bot; 
-    int sbrk_counter; /* Counts sbrk loops to grow amount sbrkd each call */
+    long unsigned int sbrk_counter; /* Counts sbrk loops to grow amount 
+                                       sbrkd each call */
     header *hptr; /* Header of the hunk to to realloc */
-    char buf[50];
+    char buf[50]; /* Print buffer */
 
     /* Setup the heap and debug params */
-    /* This might be able to be a macro ? */
     if (setup() == -1) {
         return NULL;
     }
@@ -225,16 +245,18 @@ void *realloc(void *ptr, size_t size) {
         return NULL;
     }
 
-    /* Findheader corresponding to this hunk */
+    /* Find header corresponding to this hunk */
     hptr = find_header(ptr);
 
-    /* find_header returns NULL if the pointer wasn't allocated in the heap */
+    /* find_header returns NULL if the pointer wasn't allocated in the heap
+     */
     if (!hptr) {
         snprintf(buf, 40, "realloc(): Invalid pointer\n");
         fputs(buf, stderr);
         exit(EXIT_FAILURE);
     }
 
+    /* Merge hunks if possible */
     merge(hptr);
 
     /* If reallocing to a smaller size, shrink the hunk */
@@ -242,6 +264,7 @@ void *realloc(void *ptr, size_t size) {
         if (debug) {
             myprint("Shrinking node\n");
         }
+        /* Insert a new node */
         insert_node(hptr, size);
         if (debug) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
@@ -250,15 +273,6 @@ void *realloc(void *ptr, size_t size) {
         return ptr;
     }
 
-    /* Try in place expansion, first merge if possible.
-       Even if in place expansion won't work, still defregmenting,
-       which is good. Don't have to worry about multiple unallocated
-       blocks being in a row, because free would merge those. Only can
-       have 1 after the current allocated block.
-    */
-
-
-
     /* If the node is the last in the list, just grab more memory 
        from the heap */
    if (!hptr->next) { 
@@ -266,27 +280,41 @@ void *realloc(void *ptr, size_t size) {
             myprint("next is null\n");
         }
 
-        sbrk_counter = 1;
+        sbrk_counter = 1; /* Counter used to slowly make sbrk hunks bigger 
+                           */
+        /* If the current heap location + size of hunk to be realloced is 
+           greater than the top of the heap, sbrk needs to be called */
         while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
             /* Need to call sbrk */
             if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) 
                     == (void *) -1) {
-
+                /* If sbrk fails, set errno to ENOMEM */
                 errno = ENOMEM;
                 if (debug) {
                     print_debug(REALLOC, ptr, size, 0, 0, ptr);
                 }
 
                 myprint("calling check heap top in realloc\n");
+                /* check_heap_top() checks for large amounts of memory 
+                   sbrkd at the top of the heap but not allocated to nodes
+                   and returns it to the system. This would only happen in 
+                   a failed sbrk for a large amount of memory */
                 check_heap_top();
+                /* Realloc failed, return NULL. User has to check errno if 
+                   they want to know what happened */
                 return NULL;
             }
+            /* Sbrk was successful, adjust heap_top to use the new memory */
             heap_top = (void *) ((uintptr_t) new_heap_bot 
                     + BLK_SIZE*sbrk_counter++);
         }
 
+        /* No new node is being made, just adjusting where this node ends.
+           Need to adjust heap_cur so a new node isn't created in the middle
+           of the newly expanded data section */
         heap_cur = (void *) round_up((uintptr_t) heap_cur) +
                             round_up(size) - round_up(hptr->size);
+        /* Update the size */
         hptr->size = round_up(size);
 
         if (debug) {
@@ -299,17 +327,20 @@ void *realloc(void *ptr, size_t size) {
 
     }
 
-    /* Else, need to copy to new hunk */
+    /* If we get here, need to copy to new hunk :( */
+
     /* First, allocate a new hunk */
     if (!(out_ptr = alloc(size))) {
         return NULL;
     }
 
-    /* Now copy */
+    /* Now copy from old to new (ptr to out_ptr) */
     memcpy(out_ptr, ptr, hptr->size);
-    /* Free the old hunk */
+    /* "Free" the old hunk */
+    /* Could call a proper free here to take advantage of other bookkeeping 
+       done by free? */
     hptr->allocated = 0;
-    /* Now there's a free node, merge it */
+    /* Now there's a free node, try to merge it with neighbors */
     merge(hptr);
 
     if (debug) {
@@ -317,105 +348,157 @@ void *realloc(void *ptr, size_t size) {
         myprint("Making a new node and copying\n");
         print_list();
     }
+    /* Make sure to return the new pointer, not the original */
     return out_ptr;
 }
 
 header *find_header(void *ptr) {
+/* find_header() finds the header metadata that describes the ptr's
+   data section. If no header is found (ie ptr is not in the heap),
+   returns NULL. 
+*/
     header *hptr;
     hptr = head_list;
     while(hptr) {
         /* If the address of the pointer is smaller than the address of 
            the header + the size of the hunk, then it must be in this hunk
        */
-        if ((uintptr_t) ptr < (uintptr_t) hptr + hptr->size + sizeof(header)) {
+        if ((uintptr_t) ptr < (uintptr_t) hptr + 
+                hptr->size + sizeof(header)) {
             return hptr;
         }
         hptr = hptr->next;
     }
+    /* No header found, was passed a bogus ptr not in the heap */
     return NULL;
 }
 
 void merge(header *hptr) {
+/* merge() attempts to merge hptr with its adjacent nodes.
+   If the next node is free, it is merged into hptr. 
+   If the previous node is free, it checks if hptr is unallocated first 
+   (since realloc calls this funcion, it is very possible hptr is 
+    allocated), then merges hptr into its previous node. 
+*/
+
+    /* Make sure hptr->next exists then check if its allocated */
     if (hptr->next && !hptr->next->allocated) {
+        /* If hptr->next is not allocated, adjust hptr's size */
         hptr->size += hptr->next->size + round_up(sizeof(header));
+        /* Remove hptr->next. All of it is now abosorbed by hptr */
         remove_node(hptr->next);
     }
     /* Make sure hptr is unallocated before removing it.
        This is for calls to realloc 
     */
     if (!hptr->allocated && hptr->prev && !hptr->prev->allocated) {
+        /* Similar to above, but for hptr->prev instead of hptr */
+        /* Adjust hptr->prev's size */
         hptr->prev->size += hptr->size + round_up(sizeof(header));
+        /* Remove hptr. It is now absorbed by hptr->prev */
         remove_node(hptr);
     }
 }
 
 void remove_node(header *hptr) {
+/* remove_node() removes hptr from the header list */
 
+    /* If the head is getting removed without a next, there
+       will be no list after the removal */
     if (!hptr->next && hptr == head_list) {
         head_list = NULL;
+        end_list = NULL;
         return;
     }
+    /* If hptr has a previous, change its next to hptr->next */
     if (hptr->prev) {
         hptr->prev->next = hptr->next;
     }
+    /* If hptr has a next, change its previous to hptr->prev */
     if (hptr->next) {
         hptr->next->prev = hptr->prev;
     }
+    /* If hptr doesn't have a next, it was the end of the list.
+       hptr->prev will now be the end */
     else {
         end_list = hptr->prev;
     }
 }
 
 
-/* Sets up heap if need be, checks for debug */
-bool setup() {
+int setup() {
+/* setup() sets up heap if need be with initial call to sbrk(). It 
+   initializes the global variables: heap_bot, heap_cur, and heap_top
+   used for heap bookkeeping. It also sets the global debug variables
+   used to tell the program how much information to print as it runs 
+*/
+
     char *debug_malloc;
-    /* If the heap hasn't been allocated, allocate it */
 
     /* Check for debug */
-    
     if ((debug_malloc = getenv("DEBUG_MALLOC"))) {
-        debug = true;
+        debug = true; 
         if (!strcmp(debug_malloc, "1")) {
             debug_verbose = true;
         }
     }
     
+    /* If the heap hasn't been allocated, allocate it */
     if (!heap_bot) {
         if (debug_verbose) {
             myprint("Setup heap\n");
         }
+        /* sbrk() returns the start of the allocated section of memory,
+           so set heap_bot to its result */
         if ((heap_bot = sbrk(BLK_SIZE)) == (void *) -1) {
-            /*
-            perror("sbrk");
-            */
+            /* If sbrk fails, report ENOMEM and return -1 so 
+               the calling function knows something failed */
             errno = ENOMEM;
             return -1;
         }
+        /* heap_top is the end of the allocated section of memory, 
+           set it to heap_bot + the amount carved with sbrk() */
         heap_top = (void * ) (uintptr_t) heap_bot + BLK_SIZE;
+        /* heap_cur points to the end of used space on the heap, 
+           nothing has been used yet, so set it to the bottom  */
         heap_cur = heap_bot;
 
     }
     
-    return debug;
+    return 0; /* Everything executed fine, return 0 */
 }
 
 void check_heap_top(void) {
-    uintptr_t heap_dif;
-    void *out;
+/* check_heap_top() checks for large amounts of memory sbrkd at the top of 
+   the heap but not allocated to nodes and returns it to the system. 
+   This would only happen in a failed sbrk for a large amount of memory 
+*/
+
+    uintptr_t heap_dif; /* temp variable for saving difference between
+                           heap_top and heap_cur */
+    void *out; /* output from sbrk() */
+
+    /* If the difference between the top of the heap and the
+       current position in the heap is bigger than 2 block
+       sizes, shrink the heap */
     if ((heap_top - heap_cur) > 2*BLK_SIZE) {
         if (debug) {
             myprint("Returning memory to system without node\n");
             print_list();
         }
 
+        /* Shrink the heap by the difference of heap_top and heap_cur
+           + a block */
         heap_dif = (uintptr_t) heap_top - (uintptr_t) heap_cur;
         if ((out = sbrk(-round_up(heap_dif 
                         - BLK_SIZE))) == (void *) -1) {
 
+            /* If it fails to shrink, that's not an ENOMEM, 
+               something else is wrong. Report and bail */
             perror("sbrk");
             exit(EXIT_FAILURE);
         }
+        /* Adjust heap_top */
         heap_top = (void *) round_up((uintptr_t) heap_cur +
                                     BLK_SIZE);
     }
@@ -425,27 +508,38 @@ void check_heap_top(void) {
 }
 
 void *alloc(size_t size) {
-    header *ptr = NULL;
-    void *new_heap_bot = NULL;
-    void *out_ptr = NULL;
-    long unsigned int sbrk_counter;
+/* alloc() does the heavy lifting for the calloc(), malloc, and 
+   realloc() functions. Given a size, it allocates memory on the heap,
+   creates a header metadata, and returns a pointer to the beginning of
+   the data.
+*/
 
+    header *ptr = NULL; /* Pointer to the header metadata */
+    void *new_heap_bot = NULL; /* bottom of newly sbrkd memory */ 
+    void *out_ptr = NULL; /*Pointer to the beggining of alloced memory */
+    long unsigned int sbrk_counter; /* Counts sbrk loops to grow amount 
+                                       sbrkd each call */
+
+
+    /* Start by looking for an unallocated node big enough to use */
     ptr = head_list;
     myprint("Starting to run alloc\n");
+    /* Loop through all nodes in the header list */
     while (ptr) {
         if (ptr->allocated == false && ptr->size >= size) {
             /* Found an appopriate node, use it */
-            myprint("Found a free node to use\n");
-            /*ptr->allocated = true;*/
-            insert_node(ptr, size);
-            out_ptr =  (void *) round_up((uintptr_t) ptr + sizeof(header));
-            /*
             if (debug) {
-                print_debug(MALLOC, out_ptr, size);
+            myprint("Found a free node to use\n");
             }
-            */
+            /* Insert a new node with leftover space in the node */
+            insert_node(ptr, size);
+            /* Point out_ptr to the start of data, so as to not clobber
+               the header metadata */
+            out_ptr =  (void *) round_up((uintptr_t) ptr + sizeof(header));
             return out_ptr;
         }
+        /* If there is no next, ptr is end of list. Break and go on to next 
+           section */
         if (!ptr->next) {
             break;
         }
@@ -457,99 +551,133 @@ void *alloc(size_t size) {
        node to reuse, need to make a new one.
     */
     
-    /* Check if heap is large enough */
-    /* Keep sbrk-ing blocks until it's big enough */
-    sbrk_counter = 1;
-
-
+    sbrk_counter = 1; /* Counter used to slowly make sbrk hunks bigger 
+                       */
+    /* If the current heap location + size of hunk to be realloced is 
+       greater than the top of the heap, sbrk needs to be called */
     while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
         /* Need to call sbrk */
-        /*
-        if (debug) {
-        }
-        */
         if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) == (void *) -1) {
+            /* If sbrk fails, set errno to ENOMEM */
             errno = ENOMEM;
+            /* check_heap_top() checks for large amounts of memory 
+               sbrkd at the top of the heap but not allocated to nodes
+               and returns it to the system. This would only happen in 
+               a failed sbrk for a large amount of memory */
             check_heap_top();
+            /* alloc failed, return NULL. User has to check errno if 
+               they want to know what happened */
             return NULL;
         }
+        /* Sbrk was successful, adjust heap_top to use the new memory */
         heap_top = (void *) ((uintptr_t) new_heap_bot + 
                 BLK_SIZE*sbrk_counter++);
     
     }
 
-    /* ptr should point to end of list */
+    /* Now, create a new node using ptr as the previous node.
+       ptr should point to the end of the header list */ 
     out_ptr = create_node(ptr, size);
+    /* create_node() returns a pointer to the beginning of usable memory 
+       for the memory hunk 
+    */
     return out_ptr;
 }
 
-void insert_node(header *ptr, size_t size) {
-    header *new_node;
+void insert_node(header *hptr, size_t size) {
+/* insert_node() takes a header and a size and splits the given
+   node if its size is bigger than the size by 2 alignment blocks 
+   (if it's smaller than that, there isn't room for a new node and 
+   its data. An alignment block is the smallest unit that can be
+   placed on the heap, a node can't take up less than 2 (1 for
+   the header, and 1 data alignment block))
+*/
     
-    if ((ptr->size - size) < 2*MALLOC_ALIGN) {
-        ptr->allocated = true;
+    header *new_node; /* The new_node to be created from the given header */
+    
+    /* If the given hunk isn't big enough to split into 2, don't */
+    if ((hptr->size - size) < 2*MALLOC_ALIGN) {
+        hptr->allocated = true;
         return;
     }
+
+    
+    /* Now split the hunk into 2 */
 
     if (debug) {
         myprint("Splitting hunk\n");
     }
 
-    new_node = (void *) (round_up((uintptr_t) ptr) + round_up(size) + 
+    /* Put the new_node after the ptr's data section */
+    new_node = (void *) (round_up((uintptr_t) hptr) + round_up(size) + 
                                    round_up(sizeof(header)));
-    new_node->size = round_up(ptr->size) - round_up(size) - 
+
+    /* Make the new_node's size the left over space */
+    new_node->size = round_up(hptr->size) - round_up(size) - 
                      round_up(sizeof(header));
-    ptr->size = round_up(size);
-    ptr->allocated = true;
+
+    /* Adjust hptr */
+    hptr->size = round_up(size);
+    hptr->allocated = true;
+
+    /* Initialize new_ptr */
     new_node->allocated = false;
     new_node->next = NULL;
-    
-    new_node->prev = ptr;
-    if (ptr->next) {
-        new_node->next = ptr->next;
-        ptr->next->prev = new_node;
+    new_node->prev = hptr;
+
+    /* Place new_node right after hptr */
+    if (hptr->next) {
+        new_node->next = hptr->next;
+        hptr->next->prev = new_node;
     }
-    if (ptr == end_list) {
+
+    /* Otherwise, hptr was the end of the list, make new_node end_list */
+    /*
+    if (hptr == end_list) {
+    */
+    else {
        end_list = new_node; 
     }
 
-
-    ptr->next = new_node;
+    /* Change hptr->next to new_node*/
+    hptr->next = new_node;
 
 }
 
-void *create_node(header *ptr, size_t size) {
-    header *new_node;
-    char buf[50];
+void *create_node(header *hptr, size_t size) {
+/* create_node() creates a new node at the end of the header list with 
+   the size given. It assumes hptr is the end of the list. If hptr is NULL,
+   it assumes there is no list and starts one.
+*/
 
-    new_node = heap_cur;
+    header *new_node; /* The new_node to be created from the given header*/ 
+    char buf[50]; /* Print buffer */
+
+    new_node = heap_cur; /* new_node is saved starting at heap_cur */ 
+    /* Initialize new_node */
     new_node->size = round_up(size);
     new_node->allocated = true;
     new_node->next = NULL;
-    if (!ptr) {
+    /* If the node passed is NULL, new_node will be the only node */
+    if (!hptr) {
         new_node->prev = NULL;
         head_list = new_node;
         end_list = new_node;
     }
+    /* Otherwise, new_node is going in at the end of the list */
     else {
-        ptr->next = new_node;
-        new_node->prev = ptr;
+        hptr->next = new_node;
+        new_node->prev = hptr;
         end_list = new_node;
     }
 
     /* Move the current heap ptr up the size of a header and 
-       the size of the memory chunk. Round to a value divisible by 16
+       the size of the memory chunk. 
     */
     heap_cur = (void *) round_up((uintptr_t) heap_cur) + 
                         round_up(sizeof(header)) +
                         round_up(new_node->size);
 
-    /* Now that the data structure is setup, move the ptr to 
-       the data section so as to not clobber the header 
-    */
-    /*
-    if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
-    */
     if (debug_verbose) {
         snprintf(buf, 25, "header: %p\n", new_node);
         fputs(buf, stderr);
@@ -558,17 +686,31 @@ void *create_node(header *ptr, size_t size) {
                          round_up(sizeof(header)));
         fputs(buf, stderr);
     }
+
+    /* Now that the data structure is setup, return the ptr to 
+       the data section so as to not clobber the header 
+    */
     return (void *) round_up((uintptr_t) new_node) +
                     round_up(sizeof(header));
 
 }
 
+uintptr_t round_up(uintptr_t addr) {
+/* Forces addr to be divisible by MALLOC_ALIGN */
+
+    if (addr % MALLOC_ALIGN) {
+        addr += (MALLOC_ALIGN - addr%MALLOC_ALIGN);
+    }
+    return addr;
+}
+
 
 void myprint(char *s) {
+/* Simple print function that uses snprintf instead of printf to avoid 
+   calls to malloc
+*/
+
     char buf[100];
-    /*
-    if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
-    */
     if (debug_verbose) {
         snprintf(buf, strlen(s)+1, "%s", s);
         fputs(buf, stderr);
@@ -576,22 +718,15 @@ void myprint(char *s) {
 }
 
 void print_list(void) {
+/* Prints the header list and each node's data members */
+
     header *tmp;
     char buf[100];
     tmp = head_list;
 
-    /*
-    debug = false;
-    if (getenv("DEBUG_MALLOC")) {
-        debug = true;
-    }
-    */
     if (!tmp) {
         myprint("No head of list :(\n");
     }
-    /*
-    if (debug && !strcmp(getenv("DEBUG_MALLOC"), "1")) {
-    */
     if (debug_verbose) {
         while (tmp) {
             #ifdef x86
@@ -618,6 +753,11 @@ void print_list(void) {
         }
         myprint("\n");
         myprint("End list:\n");
+        if (!end_list) {
+            myprint("No end of list :(\n");
+        }
+        else {
+
             #ifdef x86
             snprintf(buf, 19, "size: %lu\n", end_list->size);
             #else
@@ -637,21 +777,18 @@ void print_list(void) {
 
             snprintf(buf, 18, "prev: %p\n\n", end_list->prev);
             fputs(buf, stderr);
+        }
         myprint("\n");
     }
 
 }
 
 
-uintptr_t round_up(uintptr_t addr) {
-    if (addr % MALLOC_ALIGN) {
-        addr += (MALLOC_ALIGN - addr%MALLOC_ALIGN);
-    }
-    return addr;
-}
-
 void print_debug(int kind, void *ptr, size_t total_size, size_t nmemb,
         size_t size, void *old_ptr) {
+/* Each time an Alloc function is called: print what was called, 
+   the parameters, and the result
+*/
     char buf[160];
     char buf2[150];
     snprintf(buf, 9, "MALLOC: ");
