@@ -25,8 +25,8 @@ c standard library, ie
       call.
 
 Differences between this library and c stdlib:
-    * free() and realloc() each support the ptr being passed to not 
-      be the first byte of a memory region.
+    * calloc(), malloc(), free() and realloc() all support the ptr being 
+      passed to not be the first byte of a memory region.
 
 Usage:
     The library can be compiled as DYNAMIC library with:
