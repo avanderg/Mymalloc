@@ -190,6 +190,12 @@ void free(void *ptr) {
         myprint("\nafter merge:\n");
         print_list();
     }
+    /*
+    snprintf(buf, 40, "heap_top: %p\n", heap_top);
+    fputs(buf, stderr);
+    snprintf(buf, 40, "heap_cur: %p\n", heap_cur);
+    fputs(buf, stderr);
+    */
 
 }
 
@@ -259,13 +265,19 @@ void *realloc(void *ptr, size_t size) {
     /* Merge hunks if possible */
     merge(hptr);
 
-    /* If reallocing to a smaller size, shrink the hunk */
-    if (hptr->size > size && hptr->size - size > 2*MALLOC_ALIGN ) {
+    /* If reallocing to a smaller size, shrink the hunk if needed */
+   
+    if (hptr->size > size) {
         if (debug) {
-            myprint("Shrinking node\n");
+            myprint("In place shrinking\n");
         }
-        /* Insert a new node */
-        insert_node(hptr, size);
+        if (hptr->size - size > 2*MALLOC_ALIGN) {
+            if (debug) {
+                myprint("Shrinking node\n");
+            }
+            /* Insert a new node */
+            insert_node(hptr, size);
+        }
         if (debug) {
             print_debug(REALLOC, ptr, size, 0, 0, ptr);
             print_list();
