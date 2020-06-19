@@ -5,19 +5,19 @@ OBJS = malloc64.o malloc32.o\
 	   tests/test_splitnode.o tests/test_calloc.o\
 	   tests/test_merge.o tests/test_realloc.o tests/test_enomem.o\
 		tests/test_freebadptr.o tests/test_nulls.o tests/test_reallocbadptr.o\
-		tests/test_realloc2.o
+		tests/test_realloc2.o tests/test_grow_heap.o
 
 PROGS = test test_smallmalloc test3 test_splitnode test_calloc test_merge\
 		test_realloc test_enomem test_freebadptr test_nulls test_reallocbadptr\
-		test_realloc2
+		test_realloc2 test_grow_heap
 LIBS = lib64/libmalloc.so lib/libmalloc.so lib64_s/libmalloc.a
-LIB_PATH=~/Mymalloc/lib64
+LIB_PATH=~/Mymalloc_new/Mymalloc/lib64
 
 all: lib64/libmalloc.so lib64_s/libmalloc.a
 
 tests: test test_smallmalloc test3 test_splitnode test_calloc test_merge\
 	   test_realloc test_enomem test_freebadptr test_nulls test_reallocbadptr\
-	   test_realloc2
+	   test_realloc2 test_grow_heap
 
 test_s: lib64_s/libmalloc.a tests/test.o
 	$(CC) -o test tests/test.o -Llib64_s -lmalloc
@@ -82,6 +82,12 @@ test_reallocbadptr: lib64/libmalloc.so tests/test_reallocbadptr.o
 		-lmalloc
 tests/test_reallocbadptr.o: tests/test_reallocbadptr.c
 	$(CC) $(CFLAGS) -c -o tests/test_reallocbadptr.o tests/test_reallocbadptr.c
+
+test_grow_heap: lib64/libmalloc.so tests/test_grow_heap.o
+	$(CC) -L $(LIB_PATH) -o test_grow_heap tests/test_grow_heap.o \
+		-lmalloc
+tests/test_grow_heap.o: tests/test_grow_heap.c
+	$(CC) $(CFLAGS) -c -o tests/test_grow_heap.o tests/test_grow_heap.c
 
 lib/libmalloc.so: lib malloc32.o
 	$(CC) $(CFLAGS) -m32 -shared -o $@ malloc32.o

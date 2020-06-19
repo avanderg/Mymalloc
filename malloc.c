@@ -190,12 +190,6 @@ void free(void *ptr) {
         myprint("\nafter merge:\n");
         print_list();
     }
-    /*
-    snprintf(buf, 40, "heap_top: %p\n", heap_top);
-    fputs(buf, stderr);
-    snprintf(buf, 40, "heap_cur: %p\n", heap_cur);
-    fputs(buf, stderr);
-    */
 
 }
 
@@ -296,7 +290,9 @@ void *realloc(void *ptr, size_t size) {
                            */
         /* If the current heap location + size of hunk to be realloced is 
            greater than the top of the heap, sbrk needs to be called */
-        while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
+        while ((uintptr_t) heap_cur + 
+                round_up(sizeof(header)) + round_up(size) > 
+                (uintptr_t) heap_top) { 
             /* Need to call sbrk */
             if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) 
                     == (void *) -1) {
@@ -541,7 +537,7 @@ void *alloc(size_t size) {
         if (ptr->allocated == false && ptr->size >= size) {
             /* Found an appopriate node, use it */
             if (debug) {
-            myprint("Found a free node to use\n");
+                myprint("Found a free node to use\n");
             }
             /* Insert a new node with leftover space in the node */
             insert_node(ptr, size);
@@ -559,6 +555,7 @@ void *alloc(size_t size) {
     }
     myprint("Did not find an already created node, going to make one\n");
     
+
     /* If we got here, made it to the end of list without an appropriate
        node to reuse, need to make a new one.
     */
@@ -567,7 +564,9 @@ void *alloc(size_t size) {
                        */
     /* If the current heap location + size of hunk to be realloced is 
        greater than the top of the heap, sbrk needs to be called */
-    while ((uintptr_t) heap_cur + size > (uintptr_t) heap_top) { 
+    while ((uintptr_t) heap_cur + 
+            round_up(sizeof(header)) + round_up(size) > 
+            (uintptr_t) heap_top) { 
         /* Need to call sbrk */
         if ((new_heap_bot = sbrk(BLK_SIZE*sbrk_counter)) == (void *) -1) {
             /* If sbrk fails, set errno to ENOMEM */
@@ -581,6 +580,7 @@ void *alloc(size_t size) {
                they want to know what happened */
             return NULL;
         }
+        myprint("Called sbrk\n");
         /* Sbrk was successful, adjust heap_top to use the new memory */
         heap_top = (void *) ((uintptr_t) new_heap_bot + 
                 BLK_SIZE*sbrk_counter++);

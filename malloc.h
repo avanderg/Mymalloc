@@ -8,7 +8,7 @@
 #include <string.h>
 #include <errno.h>
 
-#define BLK_SIZE 65536 /* Block size to sbrk */
+#define BLK_SIZE 65535 /* Block size to sbrk */
 #define MALLOC_ALIGN 16 /* Align all addresses to 16 */
 
 /* This works on both ARM and x86. But they use different typedefs, so 
