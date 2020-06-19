@@ -99,6 +99,10 @@ Drawbacks:
       is slow. The memset to 0 happens much slower than the stdlib malloc.
       Could use some optimization (maybe architecture specific implementation),
       but for most use cases it is plenty fast. 
+    
+    * Linked-list traversal is very slow for many, many allocs and frees.
+      Running programs like vim and gcc is painfully slow b/c of this.
+        * Solution: Try and remove some traversals where possible.
 
         
     
