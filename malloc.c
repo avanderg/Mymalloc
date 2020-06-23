@@ -101,6 +101,7 @@ void free(void *ptr) {
 */
 
     header *hptr; /* The header of the hunk to free */
+    header *hptr2;
     void *tmp_ptr; /* Temporarily holds end of list for comparison */
     char buf[50]; /* Print buffer */
 
@@ -111,12 +112,33 @@ void free(void *ptr) {
 
     /* Find the header corresponding to this hunk */
     hptr = find_header(ptr);
+    /*
+    hptr2 = (header *) ((uintptr_t) ptr - round_up(sizeof(header)));
+    snprintf(buf, 50, "sizeof(header): %lu\n", sizeof(header));
+    fputs(buf, stderr);
+    if (strcmp(hptr2->magic, MAGIC)) {
+        snprintf(buf, 50, "did not find hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        exit(EXIT_FAILURE);
+    }
+    snprintf(buf, 50, "found hptr: %p\n", hptr2);
+    fputs(buf, stderr);
+    snprintf(buf, 50, "magic: %s\n", hptr2->magic);
+    fputs(buf, stderr);
+    if (hptr != hptr2) {
+        snprintf(buf, 50, "hptr != hptr2 .. hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        print_debug(FREE, ptr, 0, 0, 0, 0);
+        exit(EXIT_FAILURE);
+    }
+    */
 
     /* find_header returns NULL if the pointer wasn't allocated in the heap 
     */
     if (!hptr) {
         snprintf(buf, 40, "free(): Invalid pointer \n");
         fputs(buf, stderr);
+        print_debug(FREE, ptr, 0, 0, 0, 0);
         exit(EXIT_FAILURE);
     }
 
@@ -158,7 +180,7 @@ void free(void *ptr) {
         /* Adjust heap_top and heap_cur */
         heap_top = (void *) ((uintptr_t) heap_top - end_list->size);
         heap_cur = (void *) ((uintptr_t) heap_cur - 
-                               end_list->size + sizeof(header));
+                               end_list->size + round_up(sizeof(header)));
 
         /* Save the end list to check in a moment */
         tmp_ptr = end_list;
@@ -365,6 +387,32 @@ header *find_header(void *ptr) {
    data section. If no header is found (ie ptr is not in the heap),
    returns NULL. 
 */
+    char buf[50];
+
+
+    header *hptr;
+    hptr = (header *) ((uintptr_t) ptr - round_up(sizeof(header)));
+    /*
+    snprintf(buf, 50, "sizeof(header): %lu\n", sizeof(header));
+    fputs(buf, stderr);
+    */
+    if (strcmp(hptr->magic, MAGIC)) {
+        snprintf(buf, 50, "did not find hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        exit(EXIT_FAILURE);
+        return NULL;
+
+    }
+    /*
+    snprintf(buf, 50, "found hptr: %p\n", hptr);
+    fputs(buf, stderr);
+    snprintf(buf, 50, "magic: %s\n", hptr->magic);
+    fputs(buf, stderr);
+    */
+    return hptr;
+#ifdef OLD
+
+
     header *hptr;
     hptr = head_list;
     while(hptr) {
@@ -372,13 +420,14 @@ header *find_header(void *ptr) {
            the header + the size of the hunk, then it must be in this hunk
        */
         if ((uintptr_t) ptr < (uintptr_t) hptr + 
-                hptr->size + sizeof(header)) {
+                hptr->size + round_up(sizeof(header))) {
             return hptr;
         }
         hptr = hptr->next;
     }
     /* No header found, was passed a bogus ptr not in the heap */
     return NULL;
+#endif
 }
 
 void merge(header *hptr) {
@@ -543,7 +592,8 @@ void *alloc(size_t size) {
             insert_node(ptr, size);
             /* Point out_ptr to the start of data, so as to not clobber
                the header metadata */
-            out_ptr =  (void *) round_up((uintptr_t) ptr + sizeof(header));
+            out_ptr =  (void *) round_up((uintptr_t) ptr) +
+               round_up( sizeof(header));
             return out_ptr;
         }
         /* If there is no next, ptr is end of list. Break and go on to next 
@@ -608,7 +658,7 @@ void insert_node(header *hptr, size_t size) {
     header *new_node; /* The new_node to be created from the given header */
     
     /* If the given hunk isn't big enough to split into 2, don't */
-    if ((hptr->size - size) < 2*MALLOC_ALIGN) {
+    if ((hptr->size - size) < round_up(sizeof(header)) + MALLOC_ALIGN) {
         hptr->allocated = true;
         return;
     }
@@ -634,6 +684,7 @@ void insert_node(header *hptr, size_t size) {
 
     /* Initialize new_ptr */
     new_node->allocated = false;
+    strcpy(new_node->magic, MAGIC);
     new_node->next = NULL;
     new_node->prev = hptr;
 
@@ -669,6 +720,7 @@ void *create_node(header *hptr, size_t size) {
     /* Initialize new_node */
     new_node->size = round_up(size);
     new_node->allocated = true;
+    strcpy(new_node->magic, MAGIC);
     new_node->next = NULL;
     /* If the node passed is NULL, new_node will be the only node */
     if (!hptr) {
@@ -742,9 +794,9 @@ void print_list(void) {
     if (debug_verbose) {
         while (tmp) {
             #ifdef x86
-            snprintf(buf, 19, "size: %lu\n", tmp->size);
+            snprintf(buf, 49, "size: %lu\n", tmp->size);
             #else
-            snprintf(buf, 19, "size: %d\n", tmp->size);
+            snprintf(buf, 40, "size: %d\n", tmp->size);
             #endif
 
             fputs(buf, stderr);
@@ -752,13 +804,13 @@ void print_list(void) {
             snprintf(buf, 24, "allocated: %d\n", tmp->allocated);
             fputs(buf, stderr);
 
-            snprintf(buf, 30, "current: %p\n", tmp);
+            snprintf(buf, 35, "current: %p\n", tmp);
             fputs(buf, stderr);
 
-            snprintf(buf, 18, "next: %p\n", tmp->next);
+            snprintf(buf, 35, "next: %p\n", tmp->next);
             fputs(buf, stderr);
 
-            snprintf(buf, 18, "prev: %p\n\n", tmp->prev);
+            snprintf(buf, 35, "prev: %p\n\n", tmp->prev);
             fputs(buf, stderr);
 
             tmp = tmp->next;
@@ -771,9 +823,9 @@ void print_list(void) {
         else {
 
             #ifdef x86
-            snprintf(buf, 19, "size: %lu\n", end_list->size);
+            snprintf(buf, 49, "size: %lu\n", end_list->size);
             #else
-            snprintf(buf, 19, "size: %d\n", end_list->size);
+            snprintf(buf, 49, "size: %d\n", end_list->size);
             #endif
 
             fputs(buf, stderr);

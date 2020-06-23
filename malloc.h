@@ -23,6 +23,8 @@
 #define CALLOC 3
 #define REALLOC 4
 
+#define MAGIC "mymalloc"
+
 /* Boolean data type for my eyes */
 typedef enum bool {false, true} bool;
 
@@ -31,6 +33,7 @@ typedef struct header header;
 struct header {
     size_t size; /* Size of block */
     bool allocated; /* Is the block in use? */
+    char magic[9];
     header *next; /* Next and prev for linked list */ 
     header *prev;
 };
