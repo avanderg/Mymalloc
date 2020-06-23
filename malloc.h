@@ -36,6 +36,8 @@ struct header {
     char magic[9];
     header *next; /* Next and prev for linked list */ 
     header *prev;
+    header *u_next; /* Next in unallocated list */
+    header *u_prev;
 };
 
 
@@ -126,6 +128,9 @@ void *create_node(header *ptr, size_t size);
 uintptr_t round_up(uintptr_t addr);
 /* Forces addr to be divisible by MALLOC_ALIGN */
 
+void insert_unode(header *hptr); 
+void remove_unode(header *htpr);
+
 
 /*********** Debug printing functions **************/
 void myprint(char *s); 
@@ -135,6 +140,7 @@ void myprint(char *s);
 
 void print_list(void); 
 /* Prints the header list and each node's data members */
+void print_ulist(void); 
 
 void print_debug(int kind, void *ptr, size_t total_size, size_t nmemb,
         size_t size, void *old_ptr); 

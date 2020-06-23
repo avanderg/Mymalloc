@@ -103,6 +103,8 @@ Drawbacks:
     * Linked-list traversal is very slow for many, many allocs and frees.
       Running programs like vim and gcc is painfully slow b/c of this.
         * Solution: Try and remove some traversals where possible.
+        * Solution implemented. Light testing shows much better performance
+          in gcc and vim.
 
         
     

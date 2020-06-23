@@ -16,6 +16,8 @@ static void *heap_top = NULL;
 static void *heap_cur = NULL;
 static header *head_list = NULL;
 static header *end_list = NULL;
+static header *u_list = NULL;
+static header *end_u_list = NULL;
 static bool debug = false;
 static bool debug_verbose = false;
 
@@ -101,7 +103,6 @@ void free(void *ptr) {
 */
 
     header *hptr; /* The header of the hunk to free */
-    header *hptr2;
     void *tmp_ptr; /* Temporarily holds end of list for comparison */
     char buf[50]; /* Print buffer */
 
@@ -112,26 +113,6 @@ void free(void *ptr) {
 
     /* Find the header corresponding to this hunk */
     hptr = find_header(ptr);
-    /*
-    hptr2 = (header *) ((uintptr_t) ptr - round_up(sizeof(header)));
-    snprintf(buf, 50, "sizeof(header): %lu\n", sizeof(header));
-    fputs(buf, stderr);
-    if (strcmp(hptr2->magic, MAGIC)) {
-        snprintf(buf, 50, "did not find hptr: %p\n", hptr);
-        fputs(buf, stderr);
-        exit(EXIT_FAILURE);
-    }
-    snprintf(buf, 50, "found hptr: %p\n", hptr2);
-    fputs(buf, stderr);
-    snprintf(buf, 50, "magic: %s\n", hptr2->magic);
-    fputs(buf, stderr);
-    if (hptr != hptr2) {
-        snprintf(buf, 50, "hptr != hptr2 .. hptr: %p\n", hptr);
-        fputs(buf, stderr);
-        print_debug(FREE, ptr, 0, 0, 0, 0);
-        exit(EXIT_FAILURE);
-    }
-    */
 
     /* find_header returns NULL if the pointer wasn't allocated in the heap 
     */
@@ -151,6 +132,9 @@ void free(void *ptr) {
 
     /* Free the hunk */
     hptr->allocated = false;
+    myprint("insert_unode in free\n");
+    /* Add the node to the unallocated list */
+    insert_unode(hptr);
 
 
     if (debug) {
@@ -186,6 +170,7 @@ void free(void *ptr) {
         tmp_ptr = end_list;
 
         /* Remove the returned node from the list */
+        myprint("removing end of list in free\n");
         remove_node(end_list);
 
         if (debug) {
@@ -279,7 +264,9 @@ void *realloc(void *ptr, size_t size) {
     }
 
     /* Merge hunks if possible */
+    /*
     merge(hptr);
+    */
 
     /* If reallocing to a smaller size, shrink the hunk if needed */
    
@@ -369,7 +356,9 @@ void *realloc(void *ptr, size_t size) {
     /* "Free" the old hunk */
     /* Could call a proper free here to take advantage of other bookkeeping 
        done by free? */
-    hptr->allocated = 0;
+    hptr->allocated = false;
+    /* Add the node to the unallocated list */
+    insert_unode(hptr);
     /* Now there's a free node, try to merge it with neighbors */
     merge(hptr);
 
@@ -443,6 +432,7 @@ void merge(header *hptr) {
         /* If hptr->next is not allocated, adjust hptr's size */
         hptr->size += hptr->next->size + round_up(sizeof(header));
         /* Remove hptr->next. All of it is now abosorbed by hptr */
+        myprint("Removing node in merge 1\n");
         remove_node(hptr->next);
     }
     /* Make sure hptr is unallocated before removing it.
@@ -453,6 +443,7 @@ void merge(header *hptr) {
         /* Adjust hptr->prev's size */
         hptr->prev->size += hptr->size + round_up(sizeof(header));
         /* Remove hptr. It is now absorbed by hptr->prev */
+        myprint("remove_node in merge 2\n");
         remove_node(hptr);
     }
 }
@@ -465,7 +456,14 @@ void remove_node(header *hptr) {
     if (!hptr->next && hptr == head_list) {
         head_list = NULL;
         end_list = NULL;
+        u_list = NULL;
+        end_u_list = NULL;
         return;
+    }
+    myprint("Removing unode in remove_node\n");
+    if (!hptr->allocated) {
+        /* Remove the node from the unallocated list */
+        remove_unode(hptr);
     }
     /* If hptr has a previous, change its next to hptr->next */
     if (hptr->prev) {
@@ -576,20 +574,20 @@ void *alloc(size_t size) {
     void *out_ptr = NULL; /*Pointer to the beggining of alloced memory */
     long unsigned int sbrk_counter; /* Counts sbrk loops to grow amount 
                                        sbrkd each call */
+    char buf[60];
 
 
-    /* Start by looking for an unallocated node big enough to use */
-    ptr = head_list;
     myprint("Starting to run alloc\n");
-    /* Loop through all nodes in the header list */
+    ptr = u_list;
     while (ptr) {
-        if (ptr->allocated == false && ptr->size >= size) {
-            /* Found an appopriate node, use it */
-            if (debug) {
-                myprint("Found a free node to use\n");
-            }
+        if (ptr->size >= size) {
             /* Insert a new node with leftover space in the node */
             insert_node(ptr, size);
+            myprint("removing unode in alloc\n");
+            if (debug_verbose) {
+                snprintf(buf, 50, "Found a free node to use: %p\n", ptr);
+                fputs(buf, stderr);
+            }
             /* Point out_ptr to the start of data, so as to not clobber
                the header metadata */
             out_ptr =  (void *) round_up((uintptr_t) ptr) +
@@ -598,10 +596,10 @@ void *alloc(size_t size) {
         }
         /* If there is no next, ptr is end of list. Break and go on to next 
            section */
-        if (!ptr->next) {
+        if (!ptr->u_next) {
             break;
         }
-        ptr = ptr->next;
+        ptr = ptr->u_next;
     }
     myprint("Did not find an already created node, going to make one\n");
     
@@ -639,7 +637,7 @@ void *alloc(size_t size) {
 
     /* Now, create a new node using ptr as the previous node.
        ptr should point to the end of the header list */ 
-    out_ptr = create_node(ptr, size);
+    out_ptr = create_node(end_list, size);
     /* create_node() returns a pointer to the beginning of usable memory 
        for the memory hunk 
     */
@@ -659,7 +657,12 @@ void insert_node(header *hptr, size_t size) {
     
     /* If the given hunk isn't big enough to split into 2, don't */
     if ((hptr->size - size) < round_up(sizeof(header)) + MALLOC_ALIGN) {
+        /* Remove the node from the unallocated list */
+        if (!hptr->allocated) {
+            remove_unode(hptr);
+        }
         hptr->allocated = true;
+        myprint("Removing unode in insert_node\n");
         return;
     }
 
@@ -679,6 +682,11 @@ void insert_node(header *hptr, size_t size) {
                      round_up(sizeof(header));
 
     /* Adjust hptr */
+    if (!hptr->allocated) {
+        myprint("Removing unode in insert_node\n");
+        /* Remove the node from the unallocated list */
+        remove_unode(hptr);
+    }
     hptr->size = round_up(size);
     hptr->allocated = true;
 
@@ -687,6 +695,10 @@ void insert_node(header *hptr, size_t size) {
     strcpy(new_node->magic, MAGIC);
     new_node->next = NULL;
     new_node->prev = hptr;
+    new_node->u_prev = NULL;
+    new_node->u_next = NULL;
+    /* Add the node to the unallocated list */
+    insert_unode(new_node);
 
     /* Place new_node right after hptr */
     if (hptr->next) {
@@ -720,6 +732,8 @@ void *create_node(header *hptr, size_t size) {
     /* Initialize new_node */
     new_node->size = round_up(size);
     new_node->allocated = true;
+    new_node->u_next = NULL;
+    new_node->u_prev = NULL;
     strcpy(new_node->magic, MAGIC);
     new_node->next = NULL;
     /* If the node passed is NULL, new_node will be the only node */
@@ -768,6 +782,101 @@ uintptr_t round_up(uintptr_t addr) {
     return addr;
 }
 
+void insert_unode(header *hptr) {
+    char buf[60];
+
+    myprint("Inserting unode before\n");
+    if (debug_verbose) {
+        snprintf(buf, 50, "hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        snprintf(buf, 50, "ulist: %p\n", u_list);
+        fputs(buf, stderr);
+    }
+    print_ulist();
+    if (!u_list) {
+        u_list = hptr;
+        end_u_list = hptr;
+        hptr->u_prev = NULL;
+        myprint("Inserting unode after first\n");
+        print_ulist();
+        if (u_list == hptr) {
+                myprint("u_list is hptr\n");
+        }
+        else { 
+                myprint("u_list is not hptr\n");
+            }
+        if (debug_verbose) {
+            snprintf(buf, 50, "hptr: %p\n", hptr);
+            fputs(buf, stderr);
+            snprintf(buf, 50, "ulist: %p\n", u_list);
+            fputs(buf, stderr);
+        }
+        return;
+    }
+    if (!end_u_list) {
+        myprint("No end_u_list, but there is a head\n");
+    }
+    end_u_list->u_next = hptr;
+    hptr->u_prev = end_u_list;
+    end_u_list = hptr;
+    if (debug_verbose) {
+        myprint("Inserting unode after\n");
+        snprintf(buf, 50, "hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        snprintf(buf, 50, "ulist: %p\n", u_list);
+        fputs(buf, stderr);
+    }
+    print_ulist();
+}
+
+void remove_unode(header *hptr) {
+    char buf[60];
+    myprint("Removing unode\n");
+    myprint("before\n");
+    print_ulist();
+    myprint("\n\n");
+    if (debug_verbose) {
+        snprintf(buf, 50, "hptr: %p\n", hptr);
+        fputs(buf, stderr);
+        snprintf(buf, 50, "ulist: %p\n", u_list);
+        fputs(buf, stderr);
+    }
+    if (!hptr->u_next && hptr == u_list) {
+        u_list = NULL;
+        end_u_list = NULL;
+        hptr->u_next = NULL;
+        hptr->u_prev = NULL;
+        myprint("after\n");
+        print_ulist();
+        return;
+    }
+    else if (hptr == u_list) {
+        myprint("hptr is head of list\n");
+        if (hptr->u_next) {
+            u_list = hptr->u_next;
+            u_list->u_prev = NULL;
+        }
+        else {
+            u_list = NULL;
+            end_u_list = NULL;
+        }
+    }
+
+    if (hptr->u_prev) {
+        hptr->u_prev->u_next = hptr->u_next;
+    }
+    if (hptr->u_next) {
+        hptr->u_next->u_prev = hptr->u_prev;
+    }
+    else {
+        myprint("hptr is not head of list\n");
+        end_u_list = hptr->u_prev;
+    }
+    hptr->u_next = NULL;
+    hptr->u_prev = NULL;
+    myprint("after\n");
+    print_ulist();
+}
 
 void myprint(char *s) {
 /* Simple print function that uses snprintf instead of printf to avoid 
@@ -938,5 +1047,71 @@ void print_debug(int kind, void *ptr, size_t total_size, size_t nmemb,
 
     
     return;
+}
+
+void print_ulist(void) {
+/* Prints the header list and each node's data members */
+
+    header *tmp;
+    char buf[100];
+    tmp = u_list;
+
+    if (!tmp) {
+        myprint("No head of u list :(\n");
+    }
+    if (debug_verbose) {
+        while (tmp) {
+            #ifdef x86
+            snprintf(buf, 49, "size: %lu\n", tmp->size);
+            #else
+            snprintf(buf, 40, "size: %d\n", tmp->size);
+            #endif
+
+            fputs(buf, stderr);
+            
+            snprintf(buf, 24, "allocated: %d\n", tmp->allocated);
+            fputs(buf, stderr);
+
+            snprintf(buf, 35, "current: %p\n", tmp);
+            fputs(buf, stderr);
+
+            snprintf(buf, 35, "next: %p\n", tmp->u_next);
+            fputs(buf, stderr);
+
+            snprintf(buf, 35, "prev: %p\n\n", tmp->u_prev);
+            fputs(buf, stderr);
+
+            tmp = tmp->u_next;
+        }
+        myprint("\n");
+        myprint("End u list:\n");
+        if (!end_u_list) {
+            myprint("No end of u list :(\n");
+        }
+        else {
+
+            #ifdef x86
+            snprintf(buf, 49, "size: %lu\n", end_u_list->size);
+            #else
+            snprintf(buf, 49, "size: %d\n", end_u_list->size);
+            #endif
+
+            fputs(buf, stderr);
+            
+            snprintf(buf, 24, "allocated: %d\n", end_u_list->allocated);
+            fputs(buf, stderr);
+
+            snprintf(buf, 30, "current: %p\n", end_u_list);
+            fputs(buf, stderr);
+
+            snprintf(buf, 18, "next: %p\n", end_u_list->u_next);
+            fputs(buf, stderr);
+
+            snprintf(buf, 18, "prev: %p\n\n", end_u_list->u_prev);
+            fputs(buf, stderr);
+        }
+        myprint("\n");
+    }
+
 }
 
