@@ -6,6 +6,7 @@ This is a malloc library implementation consisting of the 4 malloc functions:
     void free(void *ptr);
     void *realloc(void *ptr, size_t size);
 
+
 These functions mostly behave in the same way as defined by the
 c standard library, ie
     * void *calloc() takes a size_t nmemb and a size_t size. It then sets
@@ -25,8 +26,7 @@ c standard library, ie
       call.
 
 Differences between this library and c stdlib:
-    * calloc(), malloc(), free() and realloc() all support the ptr being 
-      passed to not be the first byte of a memory region.
+    * This library is NOT thread safe. 
 
 Usage:
     The library can be compiled as DYNAMIC library with:
@@ -96,7 +96,7 @@ Features:
 
 Drawbacks:
     * Allocating dumb amounts of memory (ie max amount on 64 bit) with calloc
-      is slow. The memset to 0 happens much slower than the stdlib malloc.
+      is slow. The memset to 0 happens much slower than the stdlib calloc.
       Could use some optimization (maybe architecture specific implementation),
       but for most use cases it is plenty fast. 
     

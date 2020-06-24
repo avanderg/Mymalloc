@@ -2,13 +2,22 @@
 
 #include "malloc.h"
 
-/* TODO: Preliminary tests are looking pretty good.
-         Need to do:
-            * More intensive tests
-                * Pretty intensive already done, have to think about other 
-                  tests that could break it
-            * README
-                * Written but needs a proofread
+/* TODO: 
+        
+        * x86_64 on Fedora server seg faulting
+        * Works efficiently on x86_64 Mint on Intel i5
+          and Raspberry Pi 3b.
+            *Problems: 
+                * Python programs using numpy or other numerical tools fails.
+                     Seems like those call specifically the libc malloc 
+                     so that's probably the problem
+                * Java seg faults
+                * Matlab seg faults
+                * Steam lags and never comletes loading graphics
+                * These all could be because this library is not thread safe
+            * Vim, gcc, chrome, apt, tar, unzip  all seem to work great.
+            
+
 */
 
 static void *heap_bot = NULL;
