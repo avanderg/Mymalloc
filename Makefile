@@ -11,7 +11,7 @@ PROGS = test test_smallmalloc test3 test_splitnode test_calloc test_merge\
 		test_realloc test_enomem test_freebadptr test_nulls test_reallocbadptr\
 		test_realloc2 test_grow_heap
 LIBS = lib64/libmalloc.so lib/libmalloc.so lib64_s/libmalloc.a
-LIB_PATH=~/Mymalloc_new/Mymalloc/lib64
+LIB_PATH=~/Mymalloc/lib64
 
 all: lib64/libmalloc.so lib64_s/libmalloc.a
 
